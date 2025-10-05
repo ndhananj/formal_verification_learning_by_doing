@@ -1,4 +1,4 @@
-(* 01_parmap.sml - FULLY FIXED *)
+(* 01_parmap.sml *)
 structure ParMap =
 struct
   fun parMap f xs =
@@ -6,7 +6,7 @@ struct
       val n   = length xs
       val m   = Thread.Mutex.mutex ()
       val cv  = Thread.ConditionVar.conditionVar ()
-      val out = Array.array (n, NONE)  (* FIX 1: Remove type annotation *)
+      val out = Array.array (n, NONE) 
       val remaining = ref n
 
       fun put (i, y) =
@@ -18,7 +18,7 @@ struct
 
       fun spawn (i, x) = Thread.Thread.fork (fn () => put (i, f x), [])
       val _ =
-        List.app (fn (i,x) => (spawn (i,x); ()))  (* FIX 2: Discard thread return value *)
+        List.app (fn (i,x) => (spawn (i,x); ()))  
                  (ListPair.zip (List.tabulate (n, fn i => i), xs))
 
       (* wait until remaining=0 (guarded by mutex to avoid races) *)
