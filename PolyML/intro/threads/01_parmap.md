@@ -63,72 +63,128 @@ If you show me the context where you saw `=>` in PolyML code, I can explain exac
 
 Here is what the code does.
 
-It defines a `ParMap` structure.
-It has one main func, `parMap`.
+It makes `ParMap.parMap`.
+It maps `f` on `xs` in threads.
+It keeps the same result order.
 
-`parMap` takes a func `f` and list `xs`.
-It runs `f` on each item in threads.
-It keeps the same order of results.
+First, it sets up state.
 
-Setup steps inside `parMap`:
+- `n`: the list size.
 
-- Get `n`, the list length.
+- `m`: a mutex (a lock).
 
-- Make a mutex `m`.
+- `cv`: a cond var.
 
-- Make a cond var `cv`.
+- `out`: an array of options.
 
-- Make an array `out` of `NONE`.
+- `remaining`: a ref count.
 
-- Make a ref `remaining = n`.
-
-The helper `put (i, y)` does this:
+Then it defines `put`.
 
 - Lock the mutex.
 
-- Store `SOME y` at index `i`.
+- Write `SOME y` to slot `i`.
 
-- Decrement `remaining` by one.
+- Drop `remaining` by one.
 
-- If none remain, broadcast on `cv`.
+- If none left, `broadcast` on `cv`.
 
 - Unlock the mutex.
 
-One part is elided by `...`.
-That part should spawn the threads.
-Each thread runs `f x` for one item.
-Then each thread calls `put (i, y)`.
+Then it spawns one thread per item.
 
-After spawn, the main thread waits:
+- `spawn (i, x)` uses `Thread.Thread.fork`.
+
+- The func is `fn () => put (i, f x)`.
+
+- The `[]` gives default fork opts.
+
+- It builds pairs `(i, x)` with `zip`.
+
+- It does this by `List.tabulate` and `xs`.
+
+- It runs `List.app` to spawn all.
+
+Then the main thread waits.
 
 - Lock the mutex.
 
-- While work remains, wait on `cv`.
+- While work stays, call `wait cv`.
 
 - Unlock the mutex.
 
-Then it builds the result list.
-It reads each slot from `out`.
-It uses `valOf` to extract each value.
-This gives results in the input order.
+Last, it builds the result list.
 
-The demo shows a use case:
+- Read each `out` slot by index.
 
-- Build `input = [1..8]`.
+- Use `valOf` to get the value.
 
-- Map with `x*x` in parallel.
+- Now all slots hold `SOME y`.
 
-- Print the eight square numbers.
+- So `valOf` is safe here.
 
-Key points to note:
+What each term means.
 
-- The mutex guards shared state.
+- mutex: a lock for one-at-a-time use.
 
-- The cond var lets the main wait.
+- cond var: a wait and signal tool.
 
-- It spawns `n` threads at once.
+- broadcast: wake all who now wait.
 
-- Huge lists may harm run time.
+- wait: sleep till some thread signals.
 
-- A pool could help with scale.
+- ref: a box you can set and read.
 
+- option: `SOME v` or `NONE` mark.
+
+- `valOf`: get the `v` from `SOME v`.
+
+- spawn/fork: start a new thread.
+
+- zip: pair two lists, item by item.
+
+- tabulate: make a list from a gen.
+
+- app: run a func for each item.
+
+- race: two threads touch data at once.
+
+The special use of `out`.
+
+- `out` is a join board.
+
+- Each index maps to one task.
+
+- Threads fill their own slots.
+
+- The lock makes each write safe.
+
+- The wait ends when all slots fill.
+
+- Read back by index to keep order.
+
+Why order is kept.
+
+- Each input gets a fixed index.
+
+- Each thread writes to that index.
+
+- The read uses the same index.
+
+- So results match the input order.
+
+Edge notes.
+
+- This spawns `n` threads at once.
+
+- Huge `n` can harm speed or memory.
+
+- A pool could cap threads and help.
+
+- If `f` throws, a thread may die.
+
+- Then `remaining` may not reach zero.
+
+- In that case, the main would block.
+
+- You may want catch and mark fails.
